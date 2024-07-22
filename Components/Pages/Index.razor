@@ -1,0 +1,141 @@
+﻿@page "/"
+@using System.Globalization
+@using System.Collections.Generic
+@inject IJSRuntime JS
+
+<h3>Apartment Cost Calculator</h3>
+
+<div>
+    <label>Total Amount: </label>
+    <input @bind="totalAmount" type="number" placeholder="Enter total amount" />
+</div>
+<div>
+    <button @onclick="AddApartment">Add Apartment</button>
+    <button @onclick="RemoveLastApartment" disabled="@(apartmentPercentages.Count == 0)">Remove Last Apartment</button>
+</div>
+
+@if (apartmentPercentages.Count > 0)
+{
+    @foreach (var apartment in apartmentPercentages)
+    {
+        <div>
+            <label>Apartment @apartment.Id Percentage: </label>
+            <input @bind="apartment.Percentage" type="number" min="0" max="1000" step="5" /> %
+        </div>
+    }
+}
+
+<div>
+    <button class="centered" @onclick="CalculateShares" disabled="@(apartmentPercentages.Count == 0)">Calculate</button>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+@if (calculatedShares.Count > 0)
+{
+    <div>
+        <table id="resultTable" class="table">
+            <thead>
+                <tr>
+                    <th>Apartment</th>
+                    <th>Percentage</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var share in calculatedShares)
+                {
+                    <tr>
+                        <td>@share.ApartmentId</td>
+                        <td>@share.Percentage %</td>
+                        <td>@($"{share.Amount:0.00} €")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="export-buttons">
+            <button class="btn btn-success" @onclick="ExportTableToPDF">Export to PDF</button>
+            <button class="btn btn-success" @onclick="ExportTableToExcel">Export to Excel</button>
+            <button class="btn btn-success" @onclick="PrintTable">Print</button>
+        </div>
+    </div>
+}
+
+@code {
+    private decimal totalAmount;
+    private List<ApartmentPercentage> apartmentPercentages = new List<ApartmentPercentage>();
+    private List<CalculatedShare> calculatedShares = new List<CalculatedShare>();
+    private int nextApartmentId = 1;
+    private string errorMessage;
+
+    private void AddApartment()
+    {
+        apartmentPercentages.Add(new ApartmentPercentage { Id = nextApartmentId++ });
+    }
+
+    private void RemoveLastApartment()
+    {
+        if (apartmentPercentages.Count > 0)
+        {
+            apartmentPercentages.RemoveAt(apartmentPercentages.Count - 1);
+            nextApartmentId--;
+        }
+    }
+
+    private void CalculateShares()
+    {
+        decimal totalPercentage = apartmentPercentages.Sum(a => a.Percentage);
+        if (totalPercentage != 1000)
+        {
+            calculatedShares.Clear();
+            errorMessage = "The total percentage must equal 1000.";
+            return;
+        }
+
+        errorMessage = string.Empty;
+        calculatedShares.Clear();
+        foreach (var apartment in apartmentPercentages)
+        {
+            decimal amount = totalAmount * (apartment.Percentage / 1000);
+            calculatedShares.Add(new CalculatedShare
+                {
+                    ApartmentId = apartment.Id,
+                    Percentage = apartment.Percentage,
+                    Amount = amount
+                });
+        }
+    }
+
+    private void ExportTableToPDF()
+    {
+        JS.InvokeVoidAsync("exportFunctions.exportTableToPDF", "#resultTable", "ApartmentShares.pdf");
+    }
+
+    private void ExportTableToExcel()
+    {
+        JS.InvokeVoidAsync("exportFunctions.exportTableToExcel", "resultTable", "ApartmentShares.xlsx");
+    }
+
+    private void PrintTable()
+    {
+        JS.InvokeVoidAsync("exportFunctions.printTable", "resultTable");
+    }
+
+    private class ApartmentPercentage
+    {
+        public int Id { get; set; }
+        public decimal Percentage { get; set; }
+    }
+
+    private class CalculatedShare
+    {
+        public int ApartmentId { get; set; }
+        public decimal Percentage { get; set; }
+        public decimal Amount { get; set; }
+    }
+}
+
